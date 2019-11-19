@@ -433,3 +433,36 @@ func TestRemovedKeys(t *testing.T) {
 	tx.Commit()
 	err = db.CloseWithMerge(1)
 }
+
+func TestSegment(t *testing.T)  {
+	keydb.Remove("test/mydb")
+	db, err := keydb.Open("test/mydb", true)
+	if err != nil {
+		panic(err)
+	}
+
+	for i := 0; i < 5; i++ {
+		tx, err := db.BeginTX("gogo")
+		if err != nil {
+			panic(err)
+		}
+		tx.Put([]byte(fmt.Sprintf("%d", i)), []byte(fmt.Sprintf("%d", i)))
+		if err = tx.CommitSync(); err != nil {
+			panic(err)
+		}
+	}
+	if err = db.CloseWithMerge(1); err != nil {
+		panic(err)
+	}
+}
+
+func TestMerge(t *testing.T) {
+	db, err := keydb.Open("test/mydb", true)
+	if err != nil {
+		panic(err)
+	}
+
+	if err = db.CloseWithMerge(1); err != nil {
+		panic(err)
+	}
+}

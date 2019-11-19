@@ -79,9 +79,9 @@ func mergeTableSegments(db *Database, table *internalTable, segmentCount int) er
 			return nil
 		}
 
-		maxMergeSize := len(segments) / 2
+		maxMergeSize := len(segments) / 2 // 一次最多合并的segment数量，默认为segment总数的一半
 		if maxMergeSize < 4 {
-			maxMergeSize = 4
+			maxMergeSize = 4 // 最少一次合并4个segment
 		}
 
 		// ensure that only valid disk segments are merged
@@ -93,7 +93,7 @@ func mergeTableSegments(db *Database, table *internalTable, segmentCount int) er
 
 			if ok {
 				mergable = append(mergable, ds)
-				if len(mergable) == maxMergeSize {
+				if len(mergable) == maxMergeSize { //
 					break
 				}
 			} else {
@@ -108,10 +108,10 @@ func mergeTableSegments(db *Database, table *internalTable, segmentCount int) er
 			continue
 		}
 
-		// 最后一个segment的id
+		// 最后一个segment的id, 由于segments本身有序，最后一个segment即是最新的segment
 		id := mergable[len(mergable)-1].id
-		// index=0, segments[0, 0+mergable.len] 即 segments[0, n]
-		// index=1, segments[1, 1+mergable.len] 即 segments[1, n-2]
+		// index=0, segments[0, 0+mergable.len] 即 segments.id[1, 4]
+		// index=1, segments[1, 1+mergable.len] 即 segments.id[2, 5]
 		segments = segments[index : index+len(mergable)]
 
 		newseg, err := mergeDiskSegments1(db.path, table.name, id, segments)
@@ -122,7 +122,7 @@ func mergeTableSegments(db *Database, table *internalTable, segmentCount int) er
 		table.Lock()
 		for table.transactions > 0 {
 			table.Unlock()
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond) // NOTE why sleep
 			table.Lock()
 		}
 
@@ -146,6 +146,7 @@ func mergeTableSegments(db *Database, table *internalTable, segmentCount int) er
 			}
 		}
 
+		/*将合并的segment放回segments, 替换掉被合并的mergable的位置, 保持合并前后的顺序一直*/
 		newsegments := make([]segment, 0)
 
 		newsegments = append(newsegments, segments[:index]...)
@@ -165,7 +166,7 @@ var mergeSeq uint64
 // 将多个segment合并到一个diskSegment
 func mergeDiskSegments1(dbpath string, table string, id uint64, segments []segment) (segment, error) {
 
-	base := filepath.Join(dbpath, table+".merged.")
+	base := filepath.Join(dbpath, table+".merged.") // TODO 重复的'.'
 
 	sid := strconv.FormatUint(id, 10)
 

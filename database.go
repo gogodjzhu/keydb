@@ -20,7 +20,7 @@ type Database struct {
 	transactions map[uint64]*Transaction
 	path         string
 	wg           sync.WaitGroup
-	nextSegID    uint64
+	nextSegID    uint64 // 单调递增的segmentId
 	lockfile     lockfile.Lockfile
 
 	// if non-nil an asynchronous error has occurred, and the database cannot be used

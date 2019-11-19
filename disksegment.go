@@ -31,7 +31,7 @@ import (
 //
 type diskSegment struct {
 	keyFile   *os.File
-	keyBlocks int64 // 最大数据块
+	keyBlocks int64 // 数据块数量
 	dataFile  *os.File
 	id        uint64
 	// nil for segments loaded during initial open
@@ -120,7 +120,7 @@ func newDiskSegment(keyFilename, dataFilename string, keyIndex [][]byte) segment
 		panic(err)
 	}
 
-	ds.keyBlocks = (fi.Size()-1)/keyBlockSize + 1
+	ds.keyBlocks = (fi.Size()-1)/keyBlockSize + 1 // key block数量
 	ds.id = segmentID
 
 	if keyIndex == nil {

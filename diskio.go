@@ -22,6 +22,7 @@ const removedKeyLen = 0xFFFFFFFF
 var errEmptySegment = errors.New("empty segment")
 
 // called to write a memory segment to disk
+// 将segment持久化到磁盘
 func writeSegmentToDisk(db *Database, table string, seg segment) error {
 	defer db.wg.Done() // allows database to close with no writers pending
 
@@ -61,6 +62,7 @@ func writeSegmentToDisk(db *Database, table string, seg segment) error {
 	return nil
 }
 
+// 将迭代器包含的数据全部写入给定key/data文件，并封装成diskSegment返回
 func writeAndLoadSegment(keyFilename, dataFilename string, itr LookupIterator) (segment, error) {
 
 	keyFilenameTmp := keyFilename + ".tmp"
@@ -79,6 +81,7 @@ func writeAndLoadSegment(keyFilename, dataFilename string, itr LookupIterator) (
 	return newDiskSegment(keyFilename, dataFilename, keyIndex), nil
 }
 
+// 将迭代器包含的数据全部写入给定key/data文件，返回写入记录的key集合
 func writeSegmentFiles(keyFName, dataFName string, itr LookupIterator) ([][]byte, error) {
 
 	var keyIndex [][]byte
@@ -175,9 +178,9 @@ func writeSegmentFiles(keyFName, dataFName string, itr LookupIterator) ([][]byte
 		// 记录key块的长度
 		// key块的结构为:
 		// key长度[固定2字节]
-		// 压缩key[变长]
-		// key指向的data偏移量[固定8字节]
-		// key指向的data长度[固定4字节]
+		// key实体[变长]
+		// key指向的data偏移量[固定8字节], 理论上最多可寻址2^64的磁盘地址
+		// key指向的data长度[固定4字节], 单个data最多保存2^32b=4GB的数据
 		keyBlockLen += 2 + len(dk.compressedKey) + 8 + 4
 		// 累加记录value块的偏移
 		if value != nil {
