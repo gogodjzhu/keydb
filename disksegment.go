@@ -31,7 +31,7 @@ import (
 //
 type diskSegment struct {
 	keyFile   *os.File
-	keyBlocks int64
+	keyBlocks int64 // 最大数据块
 	dataFile  *os.File
 	id        uint64
 	// nil for segments loaded during initial open
@@ -55,6 +55,7 @@ type diskSegmentIterator struct {
 
 var errKeyRemoved = errors.New("key removed")
 
+// 从指定目录读取指定table的key/data文件(以{table}.开头)，并解析为segment数组返回. 如果没有指定的文件，返回空数组
 func loadDiskSegments(directory string, table string) []segment {
 	files, err := ioutil.ReadDir(directory)
 	if err != nil {
@@ -96,6 +97,8 @@ func getSegmentID(filename string) uint64 {
 	return 0
 }
 
+// 将一个key/data文件对映射为一个diskSegment
+// keyIndex: 为nil时(在读取文件生成diskSegment时)会从key文件读取; 不为nil(写入数据到文件时)则直接使用keyIndex作为返回diskSegment的索引
 func newDiskSegment(keyFilename, dataFilename string, keyIndex [][]byte) segment {
 
 	segmentID := getSegmentID(keyFilename)
@@ -130,6 +133,7 @@ func newDiskSegment(keyFilename, dataFilename string, keyIndex [][]byte) segment
 	return ds
 }
 
+// 从索引文件kf构建索引
 func loadKeyIndex(kf *os.File, keyBlocks int64) [][]byte {
 	buffer := make([]byte, keyBlockSize)
 	keyIndex := make([][]byte, 0)
@@ -152,6 +156,7 @@ func loadKeyIndex(kf *os.File, keyBlocks int64) [][]byte {
 	return keyIndex
 }
 
+// 从diskSegment迭代读取数据
 func (dsi *diskSegmentIterator) Next() (key []byte, value []byte, err error) {
 	if dsi.isValid {
 		dsi.isValid = false
@@ -177,9 +182,12 @@ func (dsi *diskSegmentIterator) nextKeyValue() error {
 	var prevKey = dsi.key
 
 	for {
+		// 读取16bit的数据
 		keylen := binary.LittleEndian.Uint16(dsi.buffer[dsi.bufferOffset:])
+		// 读到key结束块
 		if keylen == endOfBlock {
 			dsi.block++
+			// 消费过的块数量 等于 当前diskSegment标记的最大数据块，此segment消费完毕
 			if dsi.block == dsi.segment.keyBlocks {
 				dsi.finished = true
 				dsi.err = EndOfIterator
@@ -188,17 +196,22 @@ func (dsi *diskSegmentIterator) nextKeyValue() error {
 				dsi.isValid = true
 				return dsi.err
 			}
+			// 消费一个新的块，数据缓存在dsi.buffer
 			n, err := dsi.segment.keyFile.ReadAt(dsi.buffer, dsi.block*keyBlockSize)
 			if err != nil {
 				return err
 			}
+			// 异常! 读取到不完整的数据块
 			if n != keyBlockSize {
 				return errors.New(fmt.Sprint("did not read block size, read ", n))
 			}
+			// 从头(0)开始消费数据块
 			dsi.bufferOffset = 0
 			prevKey = nil
 			continue
 		}
+
+		/*解析一个key*/
 		prefixLen, compressedLen, err := decodeKeyLen(keylen)
 		if err != nil {
 			return err
@@ -210,13 +223,16 @@ func (dsi *diskSegmentIterator) nextKeyValue() error {
 
 		key = decodeKey(key, prevKey, prefixLen)
 
+		// 解析key对应的data的下标
 		dataoffset := binary.LittleEndian.Uint64(dsi.buffer[dsi.bufferOffset:])
-		dsi.bufferOffset += 8
+		dsi.bufferOffset += 8 // Uint64 = 8byte
+		// 解析key对应的data的长度
 		datalen := binary.LittleEndian.Uint32(dsi.buffer[dsi.bufferOffset:])
-		dsi.bufferOffset += 4
+		dsi.bufferOffset += 4 // Uint32 = 4byte
 
 		prevKey = key
 
+		/* 指定了区间，则继续循环，直到找出目标区间的key */
 		if dsi.lower != nil {
 			if less(key, dsi.lower) {
 				continue
@@ -241,12 +257,16 @@ func (dsi *diskSegmentIterator) nextKeyValue() error {
 	found:
 
 		if datalen == removedKeyLen {
+			// 被更新移除的键
 			dsi.data = nil
 		} else {
+			// 从dataFile读取从{dataoffset}开始的，{datalen}长度的数据到dsi.data
 			dsi.data = make([]byte, datalen)
 			_, err = dsi.segment.dataFile.ReadAt(dsi.data, int64(dataoffset))
 		}
+		// key
 		dsi.key = key
+		// 标记迭代器完成了一次数据读取
 		dsi.isValid = true
 		return err
 	}

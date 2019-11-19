@@ -164,6 +164,7 @@ type TreeEntry struct {
 }
 
 // FindNodes calls function fn on nodes with key between lower and upper inclusive
+// 找到在[lower,upper]区间内的节点，对其执行fn函数
 func FindNodes(node *node, lower []byte, upper []byte, fn func(*node)) {
 	if node == nil {
 		return
@@ -188,6 +189,7 @@ func FindNodes(node *node, lower []byte, upper []byte, fn func(*node)) {
 }
 
 // FindNodes returns a slice of nodes with the keys in range lower and upper inclusive
+// 找到[lower,upper]区间内的所有节点内，构造成TreeEntry数组返回
 func (t *Tree) FindNodes(lower []byte, upper []byte) []TreeEntry {
 	if t.root == nil {
 		return nil

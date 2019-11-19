@@ -45,20 +45,27 @@ func (ms *memorySegment) Close() error {
 	return nil
 }
 
+// memorySegment迭代器
 type memorySegmentIterator struct {
-	results []TreeEntry
-	index   int
+	results []TreeEntry // 迭代内容，即树节点
+	index   int // 当前位置
 }
 
+// 迭代获取next值
 func (es *memorySegmentIterator) Next() (key []byte, value []byte, err error) {
+	// 超出迭代范围
 	if es.index >= len(es.results) {
 		return nil, nil, EndOfIterator
 	}
+
+	/** 返回key/value，并自增当前位置index */
 	key = es.results[es.index].Key
 	value = es.results[es.index].Value
 	es.index++
 	return key, value, nil
 }
+
+// 获取迭代器目前的值，不移动游标
 func (es *memorySegmentIterator) peekKey() ([]byte, error) {
 	if es.index >= len(es.results) {
 		return nil, EndOfIterator

@@ -9,8 +9,9 @@ import (
 var txID uint64
 
 // Transaction for keydb operations
+// 事务
 type Transaction struct {
-	table  string
+	table  string // 本事务指向的表
 	open   bool
 	db     *Database
 	id     uint64
@@ -41,7 +42,9 @@ func (tx *Transaction) GetID() uint64 {
 // BeginTX starts a transaction for a database table.
 // a Transaction can only be used by a single Go routine.
 // each transaction should be completed with either Commit, or Rollback
+// 创建(恢复)事务
 func (db *Database) BeginTX(table string) (*Transaction, error) {
+	// 事务不能并发
 	db.Lock()
 	defer db.Unlock()
 
@@ -55,6 +58,7 @@ func (db *Database) BeginTX(table string) (*Transaction, error) {
 
 	it, ok := db.tables[table]
 	if !ok {
+		// 从指定目录读取{table}事务的key/value文件(如果有的话)，并恢复为内存表internalTable
 		it = &internalTable{name: table, segments: loadDiskSegments(db.path, table)}
 		db.tables[table] = it
 	}

@@ -55,6 +55,7 @@ func Open(path string, createIfNeeded bool) (*Database, error) {
 
 	db, err := open(path)
 	if err == NoDatabaseFound && createIfNeeded == true {
+		// 初始化数据库文件
 		return create(path)
 	}
 	return db, err
@@ -77,6 +78,7 @@ func open(path string) (*Database, error) {
 	if err != nil {
 		return nil, err
 	}
+	// 文件锁
 	err = lf.TryLock()
 	if err != nil {
 		return nil, DatabaseInUse
@@ -84,10 +86,13 @@ func open(path string) (*Database, error) {
 
 	db := &Database{path: path, open: true}
 	db.lockfile = lf
+	// 创建一个空的事务容器，所有事务都被保存在这里
 	db.transactions = make(map[uint64]*Transaction)
+	// 创建一个空的数据快照，所有随事务创建的快照都保存在这里
 	db.tables = make(map[string]*internalTable)
 
 	db.wg.Add(1)
+	// 开启一个routine处理定期merge
 	go mergeDiskSegments(db)
 
 	return db, nil
@@ -144,12 +149,14 @@ func IsValidDatabase(path string) error {
 		return NotADirectory
 	}
 
+	// 读路径下的文件
 	infos, err := ioutil.ReadDir(path)
 	if err != nil {
 		return err
 	}
 
 	for _, f := range infos {
+		// lockfile是文件锁，忽略
 		if "lockfile" == f.Name() {
 			continue
 		}

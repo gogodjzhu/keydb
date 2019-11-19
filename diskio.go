@@ -114,18 +114,29 @@ func writeSegmentFiles(keyFName, dataFName string, itr LookupIterator) ([][]byte
 		}
 		keyCount++
 
-		dataW.Write(value)
+		if _, err := dataW.Write(value); err != nil {
+			return nil, err
+		}
+
+		// 判断key已经达到写入目标块大小
 		if keyBlockLen+2+len(key)+8+4 >= keyBlockSize-2 { // need to leave room for 'end of block marker'
 			// key won't fit in block so move to next
-			binary.Write(keyW, binary.LittleEndian, endOfBlock)
+			if err := binary.Write(keyW, binary.LittleEndian, endOfBlock); err != nil {
+				return nil, err
+			}
 			keyBlockLen += 2
-			keyW.Write(zeros[:keyBlockSize-keyBlockLen])
+			if _, err := keyW.Write(zeros[:keyBlockSize-keyBlockLen]); err != nil {
+				return nil, err
+			}
 			keyBlockLen = 0
 			prevKey = nil
 		}
 
+		// key块长度为0, 第一次进入循环必定满足
 		if keyBlockLen == 0 {
+			// 稀疏索引策略，每隔{keyIndexInterval}个key持久化一个
 			if block%keyIndexInterval == 0 {
+				// 将[]key的值append到[][]keyIndex二位数组
 				keycopy := make([]byte, len(key))
 				copy(keycopy, key)
 				keyIndex = append(keyIndex, keycopy)
@@ -144,6 +155,7 @@ func writeSegmentFiles(keyFName, dataFName string, itr LookupIterator) ([][]byte
 		prevKey = make([]byte, len(key))
 		copy(prevKey, key)
 
+		// 组织key块，再通过for循环将key块添加到buf中，最后一次性调用keyWriter写入文件
 		var data = []interface{}{
 			uint16(dk.keylen),
 			dk.compressedKey,
@@ -156,8 +168,18 @@ func writeSegmentFiles(keyFName, dataFName string, itr LookupIterator) ([][]byte
 				goto failed
 			}
 		}
+		if _, err := keyW.Write(buf.Bytes()); err != nil {
+			return nil, err
+		}
+
+		// 记录key块的长度
+		// key块的结构为:
+		// key长度[固定2字节]
+		// 压缩key[变长]
+		// key指向的data偏移量[固定8字节]
+		// key指向的data长度[固定4字节]
 		keyBlockLen += 2 + len(dk.compressedKey) + 8 + 4
-		keyW.Write(buf.Bytes())
+		// 累加记录value块的偏移
 		if value != nil {
 			dataOffset += int64(dataLen)
 		}
@@ -166,14 +188,22 @@ func writeSegmentFiles(keyFName, dataFName string, itr LookupIterator) ([][]byte
 	// pad key file to block size
 	if keyBlockLen > 0 && keyBlockLen < keyBlockSize {
 		// key won't fit in block so move to next
-		binary.Write(keyW, binary.LittleEndian, endOfBlock)
+		if err := binary.Write(keyW, binary.LittleEndian, endOfBlock); err != nil {
+			return nil, err
+		}
 		keyBlockLen += 2
-		keyW.Write(zeros[:keyBlockSize-keyBlockLen])
+		if _, err := keyW.Write(zeros[:keyBlockSize-keyBlockLen]); err != nil {
+			return nil, err
+		}
 		keyBlockLen = 0
 	}
 
-	keyW.Flush()
-	dataW.Flush()
+	if err := keyW.Flush(); err != nil {
+		return nil, err
+	}
+	if err := dataW.Flush(); err != nil {
+		return nil, err
+	}
 
 	if keyCount == 0 {
 		return nil, errEmptySegment

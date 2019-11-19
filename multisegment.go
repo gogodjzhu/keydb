@@ -14,11 +14,13 @@ func (msi *multiSegmentIterator) peekKey() ([]byte, error) {
 	panic("peekKey called on multiSegmentIterator")
 }
 
+// 遍历multiSegment
 func (msi *multiSegmentIterator) Next() (key []byte, value []byte, err error) {
 	var currentIndex = -1
 	var lowest []byte
 
 	// find the lowest next non-deleted key in any of the iterators
+	// 找lowest key，并获取其所属的segments[]下标currentIndex
 
 	for i := len(msi.iterators) - 1; i >= 0; i-- {
 		iterator := msi.iterators[i]
@@ -38,7 +40,7 @@ func (msi *multiSegmentIterator) Next() (key []byte, value []byte, err error) {
 			continue
 		}
 
-		if lowest == nil || less(key, lowest) {
+		if lowest == nil || less(key, lowest) { // key < lowest
 			lowest = make([]byte, len(key))
 			copy(lowest, key)
 			currentIndex = i
@@ -49,6 +51,7 @@ func (msi *multiSegmentIterator) Next() (key []byte, value []byte, err error) {
 		return nil, nil, EndOfIterator
 	}
 
+	// 最小key/value
 	key, value, err = msi.iterators[currentIndex].Next()
 
 	// advance all of the iterators past the current
@@ -97,6 +100,7 @@ func (ms *multiSegment) Remove(key []byte) ([]byte, error) {
 	panic("Remove called on multiSegmentIterator")
 }
 
+// 构造multiSegment的迭代器，实现类似于操作单个segment的效果
 func (ms *multiSegment) Lookup(lower []byte, upper []byte) (LookupIterator, error) {
 	iterators := make([]LookupIterator, 0)
 	for _, v := range ms.segments {

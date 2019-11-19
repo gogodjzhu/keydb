@@ -44,6 +44,7 @@ func mergeDiskSegments(db *Database) {
 	}
 }
 
+// 合并一个数据库db下面的所有表的diskSegment，单表最多保存的segment数量由segmentCount指定
 func mergeDiskSegments0(db *Database, segmentCount int) error {
 	db.Lock()
 	copy := make([]*internalTable, 0)
@@ -61,8 +62,10 @@ func mergeDiskSegments0(db *Database, segmentCount int) error {
 	return nil
 }
 
+// 合并单个表的diskSegment
 func mergeTableSegments(db *Database, table *internalTable, segmentCount int) error {
 
+	// ??
 	var index = 0
 
 	for {
@@ -71,6 +74,7 @@ func mergeTableSegments(db *Database, table *internalTable, segmentCount int) er
 		segments := table.segments
 		table.Unlock()
 
+		// 表包含的segment数量小于最大值，不需要合并
 		if len(segments) <= segmentCount {
 			return nil
 		}
@@ -97,13 +101,17 @@ func mergeTableSegments(db *Database, table *internalTable, segmentCount int) er
 			}
 		}
 
+		// 合并到最后1个文件
 		if len(mergable) < 2 {
-			index = 0
+			index = 0 //将游标回滚，重新开始合并操作
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
 
+		// 最后一个segment的id
 		id := mergable[len(mergable)-1].id
+		// index=0, segments[0, 0+mergable.len] 即 segments[0, n]
+		// index=1, segments[1, 1+mergable.len] 即 segments[1, n-2]
 		segments = segments[index : index+len(mergable)]
 
 		newseg, err := mergeDiskSegments1(db.path, table.name, id, segments)
@@ -154,6 +162,7 @@ func mergeTableSegments(db *Database, table *internalTable, segmentCount int) er
 
 var mergeSeq uint64
 
+// 将多个segment合并到一个diskSegment
 func mergeDiskSegments1(dbpath string, table string, id uint64, segments []segment) (segment, error) {
 
 	base := filepath.Join(dbpath, table+".merged.")
